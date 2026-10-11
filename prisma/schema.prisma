@@ -1,0 +1,363 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+/// Esteira de produção / entrega do pedido
+enum OrderStatus {
+  RECEBIDO
+  EM_PRODUCAO
+  EM_SEPARACAO
+  SAIU_PARA_ENTREGA
+  ENTREGUE
+  CANCELADO
+}
+
+enum PaymentMethod {
+  PIX
+  CARTAO
+  DINHEIRO
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+// ─────────────────────────────────────────────
+// Better Auth
+// ─────────────────────────────────────────────
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  phone         String?
+  role          Role      @default(CUSTOMER)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  address         Address?
+  preferences     UserPreference?
+  orders          Order[]
+  bottleReturns   BottleReturn[]    @relation("BottleReturnCustomer")
+  bottlesReceived BottleReturn[]    @relation("BottleReturnStaff")
+  statusChanges   OrderStatusLog[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  requestLogs     RequestLog[]
+  couponUses      CouponRedemption[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ─────────────────────────────────────────────
+// Domínio
+// ─────────────────────────────────────────────
+
+model Address {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  street       String
+  neighborhood String
+  city         String
+  state        String   @default("MG")
+  zipCode      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("address")
+}
+
+model UserPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifyOrders     Boolean  @default(true)
+  notifyPromotions Boolean  @default(true)
+  favoriteFlavor   String?
+  updatedAt        DateTime @updatedAt
+
+  @@map("user_preference")
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  flavor      String
+  size        String
+  description String?
+  price       Decimal     @db.Decimal(10, 2)
+  color       String      @default("#E8A0A8")
+  stock       Int         @default(0)
+  returnable  Boolean     @default(true)
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+  images      ProductImage[]
+
+  @@map("product")
+}
+
+/// Fotos do produto: o arquivo fica no bucket S3 (SeaweedFS); aqui guardamos a chave do objeto
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  key       String   @unique
+  mimeType  String
+  size      Int
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([productId, position])
+  @@map("product_image")
+}
+
+model Order {
+  id                Int              @id @default(autoincrement())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id])
+  status            OrderStatus      @default(RECEBIDO)
+  position          Int              @default(0)
+  subtotal          Decimal          @db.Decimal(10, 2)
+  bottleDiscount    Decimal          @default(0) @db.Decimal(10, 2)
+  couponDiscount    Decimal          @default(0) @db.Decimal(10, 2)
+  deliveryFee       Decimal          @default(0) @db.Decimal(10, 2)
+  total             Decimal          @db.Decimal(10, 2)
+  paymentMethod     PaymentMethod    @default(PIX)
+  notes             String?
+  deliveryAddress   String
+  estimatedDelivery DateTime
+  deliveredAt       DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  items             OrderItem[]
+  statusLogs        OrderStatusLog[]
+  couponRedemption  CouponRedemption?
+
+  @@index([status])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("order")
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     Int
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  productName String
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(10, 2)
+  total       Decimal @db.Decimal(10, 2)
+
+  @@map("order_item")
+}
+
+/// Histórico de transições da esteira (cada movimento no kanban)
+model OrderStatusLog {
+  id         String       @id @default(cuid())
+  orderId    Int
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  changedBy  String?
+  user       User?        @relation(fields: [changedBy], references: [id])
+  note       String?
+  createdAt  DateTime     @default(now())
+
+  @@index([orderId])
+  @@map("order_status_log")
+}
+
+/// Coleta de vasilhames: cada devolução gera crédito de desconto
+model BottleReturn {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("BottleReturnCustomer", fields: [userId], references: [id])
+  quantity    Int
+  unitCredit  Decimal  @db.Decimal(10, 2)
+  credit      Decimal  @db.Decimal(10, 2)
+  receivedBy  String?
+  staff       User?    @relation("BottleReturnStaff", fields: [receivedBy], references: [id])
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("bottle_return")
+}
+
+model Coupon {
+  id          String             @id @default(cuid())
+  code        String             @unique
+  description String
+  type        CouponType         @default(PERCENT)
+  value       Decimal            @db.Decimal(10, 2)
+  minOrder    Decimal            @default(0) @db.Decimal(10, 2)
+  expiresAt   DateTime?
+  maxUses     Int?
+  active      Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  redemptions CouponRedemption[]
+
+  @@map("coupon")
+}
+
+model CouponRedemption {
+  id        String   @id @default(cuid())
+  couponId  String
+  coupon    Coupon   @relation(fields: [couponId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  orderId   Int      @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount    Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  @@unique([couponId, userId])
+  @@map("coupon_redemption")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@map("notification")
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("setting")
+}
+
+// ─────────────────────────────────────────────
+// Observabilidade
+// ─────────────────────────────────────────────
+
+/// Trilha de auditoria: quem fez o quê, em qual entidade
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userEmail String?
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  ip        String?
+  userAgent String?
+  success   Boolean  @default(true)
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
+  @@map("audit_log")
+}
+
+/// Log de todas as chamadas HTTP recebidas pela aplicação
+model RequestLog {
+  id         String   @id @default(cuid())
+  method     String
+  path       String
+  query      String?
+  /// page | rsc | action | api
+  kind       String
+  actionId   String?
+  status     Int?
+  error      String?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ip         String?
+  userAgent  String?
+  referer    String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([path])
+  @@index([userId])
+  @@map("request_log")
+}
