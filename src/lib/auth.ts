@@ -8,7 +8,11 @@ import { writeAudit } from "@/lib/audit";
 export const auth = betterAuth({
   appName: "Iorgutê",
   baseURL: process.env.BETTER_AUTH_URL,
-  secret: process.env.BETTER_AUTH_SECRET,
+  // No `next build` (ex.: Docker) o segredo não é necessário e não deve ser embutido na imagem;
+  // em execução, sem BETTER_AUTH_SECRET o better-auth recusa iniciar.
+  secret:
+    process.env.BETTER_AUTH_SECRET ??
+    (process.env.NEXT_PHASE === "phase-production-build" ? "build-only-placeholder-not-used-at-runtime" : undefined),
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: {
     enabled: true,
