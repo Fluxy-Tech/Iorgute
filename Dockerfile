@@ -16,7 +16,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 # prisma generate precisa de uma URL válida no formato, mas não conecta no banco
-ARG DATABASE_URL="postgres://build:build@localhost:5432/build"
+ARG DATABASE_URL="postgres://sturnus:SturnusFlow@147.79.110.10:8002/data_operation_iorgute?sslmode=disable"
 ENV DATABASE_URL=${DATABASE_URL}
 RUN npm run build
 
@@ -32,7 +32,7 @@ FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=7601 \
+    PORT=8001 \
     HOSTNAME=0.0.0.0 \
     RUN_MIGRATIONS=true
 
@@ -50,6 +50,6 @@ COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
 USER nextjs
-EXPOSE 7601
+EXPOSE 8001
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "server.js"]
