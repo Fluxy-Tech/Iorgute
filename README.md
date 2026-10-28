@@ -63,7 +63,7 @@ No checkout o cliente pode usar o crédito de garrafas e um cupom; o estoque é 
 Enviadas em **Painel → Produtos → Fotos** (até 8 por produto, 3 MB cada; a primeira é a capa). Os arquivos vão para o bucket S3 (SeaweedFS) configurado nas variáveis `SEAWEEDFS_S3_*`, na pasta `SEAWEEDFS_S3_PREFIX/<id do produto>/`; o banco guarda só a chave do objeto (tabela `product_image`). Remover a foto no painel apaga também o arquivo do bucket.
 
 - **Bucket privado** (`UPLOAD_PUBLIC_READ=false`, padrão): a aplicação entrega as fotos em `/api/produtos/imagens/[id]`, lendo do S3 com as credenciais, com cache imutável no navegador.
-- **Bucket público** (`UPLOAD_PUBLIC_READ=true`): o navegador busca direto de `UPLOAD_PUBLIC_BASE_URL/<chave>`.
+- **Bucket público** (`UPLOAD_PUBLIC_READ=true`): o navegador busca direto de `SEAWEEDFS_S3_ENDPOINT/SEAWEEDFS_S3_BUCKET/<chave>`.
 
 Sem fotos, o produto exibe a garrafinha ilustrada na cor do sabor.
 

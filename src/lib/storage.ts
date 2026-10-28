@@ -7,7 +7,8 @@ import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } fro
  *
  * Entrega: por padrão o bucket é privado, então as fotos passam pela rota
  * /api/produtos/imagens/[id], que lê do S3 com as credenciais. Com UPLOAD_PUBLIC_READ=true
- * (bucket com leitura pública), o navegador busca direto de UPLOAD_PUBLIC_BASE_URL.
+ * (bucket com leitura pública), o navegador busca direto de
+ * SEAWEEDFS_S3_ENDPOINT/SEAWEEDFS_S3_BUCKET/<chave>.
  */
 
 function config() {
@@ -19,7 +20,6 @@ function config() {
     bucket: e.SEAWEEDFS_S3_BUCKET,
     region: e.SEAWEEDFS_S3_REGION || "us-east-1",
     prefix: (e.SEAWEEDFS_S3_PREFIX || "products").replace(/^\/+|\/+$/g, ""),
-    publicBaseUrl: e.UPLOAD_PUBLIC_BASE_URL?.replace(/\/+$/, ""),
     publicRead: e.UPLOAD_PUBLIC_READ === "true",
   };
   const missing = (["endpoint", "accessKeyId", "secretAccessKey", "bucket"] as const).filter((k) => !cfg[k]);
@@ -88,8 +88,10 @@ export async function readStoredObject(key: string) {
 /** URL que o navegador usa para exibir a foto */
 export function productImageSrc(image: { id: string; key: string }) {
   const e = process.env;
-  if (e.UPLOAD_PUBLIC_READ === "true" && e.UPLOAD_PUBLIC_BASE_URL) {
-    return `${e.UPLOAD_PUBLIC_BASE_URL.replace(/\/+$/, "")}/${image.key}`;
+  if (e.UPLOAD_PUBLIC_READ === "true" && e.SEAWEEDFS_S3_ENDPOINT && e.SEAWEEDFS_S3_BUCKET) {
+    const endpoint = e.SEAWEEDFS_S3_ENDPOINT.replace(/\/+$/, "");
+    const bucket = e.SEAWEEDFS_S3_BUCKET.replace(/^\/+|\/+$/g, "");
+    return `${endpoint}/${bucket}/${image.key}`;
   }
   return `/api/produtos/imagens/${image.id}`;
 }
