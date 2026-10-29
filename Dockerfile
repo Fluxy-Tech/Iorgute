@@ -16,7 +16,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 # prisma generate precisa de uma URL válida no formato, mas não conecta no banco
-ARG DATABASE_URL="postgres://build:build@localhost:5432/build"
+ARG DATABASE_URL="postgres://Sturnus:SturnusFlow@147.79.110.10:8002/data_operation_iorgute?sslmode=disable"
 ENV DATABASE_URL=${DATABASE_URL}
 RUN npm run build
 
